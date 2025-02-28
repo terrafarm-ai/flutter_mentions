@@ -428,7 +428,7 @@ class FlutterMentionsState extends State<FlutterMentions> {
                     suggestionBuilder: list.suggestionBuilder,
                     suggestionListDecoration: widget.suggestionListDecoration,
                     data: list.data.where((element) {
-                      final ele = element['display'].toLowerCase();
+                      final ele = element['search_text'].toLowerCase();
                       final str = _selectedMention!.str
                           .toLowerCase()
                           .replaceAll(RegExp(_pattern), '');
