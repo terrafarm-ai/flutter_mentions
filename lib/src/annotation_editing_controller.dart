@@ -51,7 +51,10 @@ class AnnotationEditingController extends TextEditingController {
   set mapping(Map<String, Annotation> _mapping) {
     this._mapping = _mapping;
 
-    _pattern = "(${_mapping.keys.map((key) => RegExp.escape(key)).join('|')})";
+    var sortedKeys = _mapping.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length)); // 긴 것부터 정렬
+
+    _pattern = "(${sortedKeys.map((key) => RegExp.escape(key)).join('|')})";
   }
 
   @override
