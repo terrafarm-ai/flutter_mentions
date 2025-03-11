@@ -23,6 +23,7 @@ class Mention {
     this.suggestionBuilder,
     this.disableMarkup = false,
     this.markupBuilder,
+    this.displayBuilder,
   });
 
   /// A single character that will be used to trigger the suggestions.
@@ -50,6 +51,10 @@ class Mention {
   /// Allows to set custom markup for the mentioned item.
   final String Function(String trigger, String mention, String value)?
       markupBuilder;
+
+  /// Allows to set custom display for the mentioned item.
+  final String Function(List<InlineSpan> children, TextStyle style, Annotation annotaiton)?
+      displayBuilder;
 }
 
 class Annotation {
@@ -58,15 +63,20 @@ class Annotation {
     this.style,
     this.id,
     this.display,
+    this.data = const {},
     this.disableMarkup = false,
     this.markupBuilder,
+    this.displayBuilder,
   });
 
   TextStyle? style;
   String? id;
   String? display;
   String trigger;
+  Map<String, dynamic> data;
   bool disableMarkup;
   final String Function(String trigger, String mention, String value)?
       markupBuilder;
+  final String Function(List<InlineSpan> children, TextStyle style, Annotation annotation)?
+      displayBuilder;
 }

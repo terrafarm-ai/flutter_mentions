@@ -5,6 +5,7 @@ part of flutter_mentions;
 class AnnotationEditingController extends TextEditingController {
   Map<String, Annotation> _mapping;
   String? _pattern;
+  List<String>? invalidList;
 
   // Generate the Regex pattern for matching all the suggestions in one.
   AnnotationEditingController(this._mapping)
@@ -57,40 +58,59 @@ class AnnotationEditingController extends TextEditingController {
     _pattern = "(${sortedKeys.map((key) => RegExp.escape(key)).join('|')})";
   }
 
+  void setInvalidList(List<String> list) {
+    invalidList = list;
+  }
+
   @override
   TextSpan buildTextSpan({BuildContext? context, TextStyle? style, bool? withComposing}) {
     var children = <InlineSpan>[];
 
-    if (_pattern == null || _pattern == '()') {
-      children.add(TextSpan(text: text, style: style));
-    } else {
-      text.splitMapJoin(
-        RegExp('$_pattern'),
-        onMatch: (Match match) {
-          if (_mapping.isNotEmpty) {
-            final mention = _mapping[match[0]!] ??
-                _mapping[_mapping.keys.firstWhere((element) {
-                  final reg = RegExp(element);
+    final mentionPattern = RegExp(r'@([\uE000-\uF8FF])');
 
-                  return reg.hasMatch(match[0]!);
-                })]!;
+    text.splitMapJoin(
+      mentionPattern,
+      onMatch: (Match match) {
+        final extractedId = match.group(1)!.codeUnitAt(0) - 0xE000;
+        final mention = _mapping.values.firstWhere((element) => element.id == '${extractedId}');
+        if (mention.displayBuilder != null) {
+          return mention.displayBuilder!(children, style!, mention);
+        }
+        return '';
+      },
+      onNonMatch: (String text) {
+        var remainingText = text;
 
-            children.add(
-              TextSpan(
-                text: match[0],
-                style: style!.merge(mention.style),
-              ),
-            );
+        while (remainingText.isNotEmpty) {
+          String? firstInvalid;
+          var firstInvalidIndex = remainingText.length;
+
+          for (var invalid in invalidList ?? []) {
+            var index = remainingText.indexOf(invalid);
+            if (index != -1 && index < firstInvalidIndex) {
+              firstInvalid = invalid;
+              firstInvalidIndex = index;
+            }
           }
 
-          return '';
-        },
-        onNonMatch: (String text) {
-          children.add(TextSpan(text: text, style: style));
-          return '';
-        },
-      );
-    }
+          if (firstInvalid == null) {
+            children.add(TextSpan(text: remainingText, style: style));
+            break;
+          }
+
+          if (firstInvalidIndex > 0) {
+            children.add(TextSpan(text: remainingText.substring(0, firstInvalidIndex), style: style));
+          }
+
+          children.add(TextSpan(text: firstInvalid, style: style?.copyWith(color: Colors.red)));
+
+          remainingText = remainingText.substring(firstInvalidIndex + firstInvalid.length);
+        }
+
+        return '';
+      },
+
+    );
 
     return TextSpan(style: style, children: children);
   }

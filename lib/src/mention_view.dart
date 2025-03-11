@@ -265,6 +265,7 @@ class FlutterMentionsState extends State<FlutterMentions> {
           trigger: element.trigger,
           disableMarkup: element.disableMarkup,
           markupBuilder: element.markupBuilder,
+          displayBuilder: element.displayBuilder,
         );
       }
 
@@ -274,17 +275,21 @@ class FlutterMentionsState extends State<FlutterMentions> {
                 style: e['style'],
                 id: e['id'],
                 display: e['display'],
+                data: e,
                 trigger: element.trigger,
                 disableMarkup: element.disableMarkup,
                 markupBuilder: element.markupBuilder,
+                displayBuilder: element.displayBuilder,
               )
             : Annotation(
                 style: element.style,
                 id: e['id'],
                 display: e['display'],
+                data: e,
                 trigger: element.trigger,
                 disableMarkup: element.disableMarkup,
                 markupBuilder: element.markupBuilder,
+                displayBuilder: element.displayBuilder,
               ),
       );
     });
@@ -302,21 +307,10 @@ class FlutterMentionsState extends State<FlutterMentions> {
     final _list = widget.mentions
         .firstWhere((element) => selectedMention.str.contains(element.trigger));
 
-    // find the text by range and replace with the new value.
-    controller!.text = controller!.value.text.replaceRange(
-      selectedMention.start,
-      selectedMention.end,
-      "${_list.trigger}${value['display']}${widget.appendSpaceOnAdd ? ' ' : ''}",
-    );
+    final start = selectedMention.start + _list.trigger.length;
+    replaceMention(start, selectedMention.end, value);
 
     if (widget.onMentionAdd != null) widget.onMentionAdd!(value);
-
-    // Move the cursor to next position after the new mentioned item.
-    var nextCursorPosition =
-        selectedMention.start + 1 + value['display']?.length as int? ?? 0;
-    if (widget.appendSpaceOnAdd) nextCursorPosition++;
-    controller!.selection =
-        TextSelection.fromPosition(TextPosition(offset: nextCursorPosition));
   }
 
   void suggestionListerner() {
@@ -354,7 +348,97 @@ class FlutterMentionsState extends State<FlutterMentions> {
     }
   }
 
+  void replaceMention(int start, int end, Map<String, dynamic> value) {
+    final oldCursorPosition = controller!.selection.baseOffset;
+
+    const base = 0xE000; // PUA 시작점
+
+    final char = String.fromCharCode(base + int.parse(value['id']));
+    final mention = '${char}';
+
+    var newCursorPosition = oldCursorPosition;
+    if (oldCursorPosition > end) {
+      // 커서가 변경된 범위 이후에 있었으면, 새 텍스트 길이 차이만큼 조정
+      newCursorPosition += (mention.length - (end - start));
+    } else if (oldCursorPosition >= start) {
+      // 커서가 변경된 범위 내에 있었으면, mention의 끝으로 이동
+      newCursorPosition = start + mention.length;
+    }
+
+    controller!.value = TextEditingValue(
+      text: controller!.text.replaceRange(start, end, mention),
+      selection: TextSelection.collapsed(offset: newCursorPosition),
+      composing: TextRange.empty,
+    );
+  }
+
   void inputListeners() {
+    final text = controller!.text;
+
+    final cursorPos = controller!.selection.baseOffset;
+    final invalidList = <String>[];
+
+    for(var mention in widget.mentions) {
+      final trigger = mention.trigger;
+      var index = text.indexOf(trigger);
+
+      while (index != -1) {
+        var start = index + trigger.length;
+        var end = start;
+
+        String? bestMatch;
+        var maxLen = 0;
+        var maxCount = 0;
+        Map<String, dynamic>? bestPattern;
+
+        while (end <= text.length) {
+          final candidate = text.substring(start, end);
+
+          final annotations = mention.data;
+          var hasCandidate = false;
+          for (var pattern in annotations) {
+            if (pattern['search_text'].contains(candidate) && candidate.length >= maxLen) {
+              hasCandidate = true;
+              if (candidate.length > maxLen) {
+                maxCount = 0;
+              }
+
+              maxCount++;
+
+              maxLen = candidate.length;
+              bestMatch = candidate;
+              bestPattern = pattern;
+            }
+          }
+
+          if (end == text.length || !hasCandidate) {
+            if (!hasCandidate) {
+              end--;
+            }
+            break;
+          }
+
+          end++;
+        }
+
+        final isComposing = controller!.value.composing.isValid;
+
+        index = text.indexOf(trigger, index + 1);
+        if (cursorPos >= start && (cursorPos - (isComposing ? 1 : 0)) <= end) {
+          continue;
+        }
+
+        if (bestMatch != null && bestPattern != null && maxCount == 1) {
+          replaceMention(start, start + maxLen, bestPattern);
+        } else {
+          final length = maxLen > 0 ? maxLen : 1;
+          invalidList.add('${trigger}${text.substring(start, start + length).trim()}');
+        }
+      }
+    }
+
+    controller?.setInvalidList(invalidList);
+
     if (widget.onChanged != null) {
       widget.onChanged!(controller!.text);
     }
