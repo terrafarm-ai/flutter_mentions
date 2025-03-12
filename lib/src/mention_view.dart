@@ -308,7 +308,7 @@ class FlutterMentionsState extends State<FlutterMentions> {
         .firstWhere((element) => selectedMention.str.contains(element.trigger));
 
     final start = selectedMention.start + _list.trigger.length;
-    replaceMention(start, selectedMention.end, value);
+    replaceMention(start, selectedMention.end, value, true);
 
     if (widget.onMentionAdd != null) widget.onMentionAdd!(value);
   }
@@ -348,13 +348,13 @@ class FlutterMentionsState extends State<FlutterMentions> {
     }
   }
 
-  void replaceMention(int start, int end, Map<String, dynamic> value) {
+  void replaceMention(int start, int end, Map<String, dynamic> value, [bool isSpace = false]) {
     final oldCursorPosition = controller!.selection.baseOffset;
 
     const base = 0xE000; // PUA 시작점
 
     final char = String.fromCharCode(base + int.parse(value['id']));
-    final mention = '${char}';
+    final mention = '${char}${isSpace ? ' ' : ''}';
 
     var newCursorPosition = oldCursorPosition;
     if (oldCursorPosition > end) {
@@ -432,7 +432,9 @@ class FlutterMentionsState extends State<FlutterMentions> {
           replaceMention(start, start + maxLen, bestPattern);
         } else {
           final length = maxLen > 0 ? maxLen : 1;
-          invalidList.add('${trigger}${text.substring(start, start + length).trim()}');
+          if (text.length > start + length) {
+            invalidList.add('${trigger}${text.substring(start, start + length).trim()}');
+          }
         }
       }
     }
